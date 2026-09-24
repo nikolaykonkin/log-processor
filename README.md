@@ -1,4 +1,5 @@
 # Log Processor — многопоточный обработчик логов веб-сервера
+![CI](https://github.com/nikolaykonkin/log-processor/actions/workflows/ci.yml/badge.svg)
 
 ## Описание
 
