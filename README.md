@@ -1,4 +1,5 @@
 # Log Processor — многопоточный обработчик логов веб-сервера
+
 ![CI](https://github.com/nikolaykonkin/log-processor/actions/workflows/ci.yml/badge.svg)
 
 ## Описание
@@ -7,7 +8,7 @@
 
 ## Стек
 
-- Go 1.21+
+- Go 1.26
 - Только стандартная библиотека, внешних зависимостей нет
 - Горутины и каналы
 - Паттерны: pipeline, worker pool, fan-out (tee)
@@ -67,6 +68,60 @@ read --> process (3 workers) --> tee
 - Проверка на гонки: `go test -race`
 - Unit-тесты стадий и интеграционный тест всего pipeline
 
+## Тестирование
+
+```bash
+# Все тесты с детектором гонок
+go test -v -race ./...
+
+# С покрытием
+go test -coverprofile=c.out ./...
+go tool cover -func=c.out
+
+# Только vet
+go vet ./...
+```
+
+### Покрытие
+
+Покрытие — **61.9%** (statements). По функциям:
+
+| Функция | Покрытие | Что это |
+|---|---|---|
+| `main` | 0.0% | точка входа, сигналы ОС, вывод — тестируется вручную |
+| `printTopIPs` | 0.0% | вывод в консоль |
+| `printErrorEntries` | 0.0% | вывод в консоль |
+| `readLogs` | 70.6% | не все ветки отмены контекста |
+| `filterLogs` | 83.3% | |
+| `processLogs` | 88.2% | воркеры |
+| `tee` | 88.2% | раздвоение потока |
+| `calculateStats` | 92.3% | |
+| `runPipeline` | 95.0% | сборка pipeline |
+
+`main` и функции печати в консоль покрыты нулем — они не влияют на логику pipeline. Если считать только стадии pipeline, покрытие выше 85%.
+
+### Что покрыто
+
+- `TestParseLogLine` — разбор строки CSV, корректные поля
+- `TestFilterLogs` — фильтр по статус-коду
+- `TestCalculateStats` — базовый подсчет статистики
+- `TestCalculateStats_CountsAllEntries` — регрессия: `TotalRequests` считает все записи, а не только ошибки
+- `TestStatistics_AverageRespTime` — среднее время ответа, в том числе пустой вход
+- `TestTee` — обе ветки tee получают одну и ту же последовательность
+- `TestReadLogs_DrainsErrCh` — регрессия: канал ошибок вычитывается до конца
+- `TestPipeline_TotalRequestsCountsAllEntries` — интеграционный тест всей сборки pipeline
+
+Отдельного теста именно на `processLogs` нет: воркеры проверяются через интеграционный `TestPipeline_TotalRequestsCountsAllEntries`.
+
+### CI
+
+GitHub Actions (`.github/workflows/ci.yml`) на каждый `push` и `pull_request`:
+
+1. `go vet ./...`
+2. `go test -race -cover ./...`
+
+Версия Go берется из `go.mod` через `go-version-file`.
+
 ## Работа с фидбеком преподавателя
 
 Проект сдан и зачтен. Перед публикацией закрыты два замечания.
@@ -81,7 +136,6 @@ read --> process (3 workers) --> tee
 
 ## Roadmap
 
-- Бейдж CI в README после первого успешного прогона GitHub Actions
 - Параметры командной строки: число воркеров и порог статус-кода
 - Тесты на отмену контекста для отдельных стадий
 - Поддержка других форматов логов
